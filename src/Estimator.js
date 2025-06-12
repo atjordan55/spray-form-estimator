@@ -156,3 +156,88 @@ export default function Estimator() {
     </div>
   );
 }
+
+      <div className="grid grid-cols-3 gap-4">
+        <div>
+          <label className="block font-semibold">Manual Labor Rate ($/hr)</label>
+          <input type="number" value={manualRate} onChange={(e) => setManualRate(parseFloat(e.target.value))} className="border p-1 w-full" />
+        </div>
+        <div>
+          <label className="block font-semibold">Manual Labor Hours</label>
+          <input type="number" value={manualHours} onChange={(e) => setManualHours(parseFloat(e.target.value))} className="border p-1 w-full" />
+        </div>
+        <div>
+          <label className="block font-semibold">Equipment Rental ($)</label>
+          <input type="number" value={equipmentCost} onChange={(e) => setEquipmentCost(parseFloat(e.target.value))} className="border p-1 w-full" />
+        </div>
+        <div>
+          <label className="block font-semibold">Waste Disposal ($)</label>
+          <input type="number" value={wasteCost} onChange={(e) => setWasteCost(parseFloat(e.target.value))} className="border p-1 w-full" />
+        </div>
+        <div>
+          <label className="block font-semibold">Travel Distance (miles)</label>
+          <input type="number" value={travelDistance} onChange={(e) => setTravelDistance(parseFloat(e.target.value))} className="border p-1 w-full" />
+        </div>
+        <div>
+          <label className="block font-semibold">Fuel Cost per Mile ($)</label>
+          <input type="number" value={fuelCostPerMile} onChange={(e) => setFuelCostPerMile(parseFloat(e.target.value))} className="border p-1 w-full" />
+        </div>
+        <div>
+          <label className="block font-semibold">Material Markup (%)</label>
+          <input type="number" value={materialMarkup} onChange={(e) => setMaterialMarkup(parseFloat(e.target.value))} className="border p-1 w-full" />
+        </div>
+        <div>
+          <label className="block font-semibold">Labor Markup (%)</label>
+          <input type="number" value={laborMarkup} onChange={(e) => setLaborMarkup(parseFloat(e.target.value))} className="border p-1 w-full" />
+        </div>
+        <div>
+          <label className="block font-semibold">Complexity Multiplier</label>
+          <input type="number" value={complexity} onChange={(e) => setComplexity(parseFloat(e.target.value))} className="border p-1 w-full" />
+        </div>
+        <div>
+          <label className="block font-semibold">Discount (%)</label>
+          <input type="number" value={discount} onChange={(e) => setDiscount(parseFloat(e.target.value))} className="border p-1 w-full" />
+        </div>
+      </div>
+
+      <div className="bg-green-100 p-4 rounded shadow space-y-2">
+        <h2 className="text-lg font-bold">Estimate Output</h2>
+        <p><strong>Total Area (sq ft):</strong> {totalSqFt.toFixed(2)}</p>
+        <p><strong>Estimated Gallons:</strong> {totalGallons.toFixed(2)}</p>
+        <p><strong>Total Material Cost:</strong> ${totalMaterialCost.toFixed(2)}</p>
+        <p><strong>Total Labor Cost (Base):</strong> ${baseLaborCost.toFixed(2)}</p>
+        <p><strong>Marked-Up Material Cost:</strong> ${markedUpMaterial.toFixed(2)}</p>
+        <p><strong>Marked-Up Labor Cost:</strong> ${markedUpLabor.toFixed(2)}</p>
+        <p><strong>Travel Cost:</strong> ${travelCost.toFixed(2)}</p>
+        <p><strong>Grand Total:</strong> ${grandTotal.toFixed(2)}</p>
+        <p><strong>Profit Margin:</strong> {profitMargin.toFixed(2)}%</p>
+      </div>
+
+      <div className="bg-white p-4 rounded shadow-md grid grid-cols-2 gap-4">
+        <h2 className="text-xl font-bold col-span-2">Actuals Entry</h2>
+        <div>
+          <label className="block font-semibold">Actual Gallons Used</label>
+          <input className="border p-1 w-full" type="number" value={actualGallons} onChange={(e) => setActualGallons(parseFloat(e.target.value))} />
+        </div>
+        <div>
+          <label className="block font-semibold">Actual Manual Hours</label>
+          <input className="border p-1 w-full" type="number" value={actualManualHours} onChange={(e) => setActualManualHours(parseFloat(e.target.value))} />
+        </div>
+        <div>
+          <label className="block font-semibold">Actual Labor Rate (Optional)</label>
+          <input className="border p-1 w-full" type="number" value={actualManualRate} onChange={(e) => setActualManualRate(parseFloat(e.target.value))} />
+        </div>
+      </div>
+
+      <div className="bg-gray-100 p-4 rounded shadow-md">
+        <h2 className="text-xl font-bold mb-4">Actual vs Estimated Comparison</h2>
+        <p><strong>Actual Gallons Used:</strong> {actualGallons} (Estimated: {totalGallons.toFixed(2)})</p>
+        <p><strong>Actual Material Cost:</strong> ${actualMaterialCost.toFixed(2)}</p>
+        <p><strong>Actual Manual Labor Hours:</strong> {actualManualHours} (Estimated: {manualHours})</p>
+        <p><strong>Actual Labor Cost:</strong> ${actualLaborCost.toFixed(2)}</p>
+        <p><strong>Material Cost Variance:</strong> ${(actualMaterialCost - totalMaterialCost).toFixed(2)}</p>
+        <p><strong>Labor Cost Variance:</strong> ${(actualLaborCost - baseLaborCost).toFixed(2)}</p>
+      </div>
+    </div>
+  );
+}
