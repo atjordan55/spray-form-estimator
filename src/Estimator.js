@@ -106,20 +106,27 @@ export default function Estimator() {
         <div key={area.id} className="p-4 bg-gray-100 rounded shadow space-y-2">
           <h2 className="font-semibold">Area #{index + 1}</h2>
           <div className="grid grid-cols-3 gap-4">
-            <input type="text" value={area.areaType} onChange={(e) => updateArea(area.id, 'areaType', e.target.value)} placeholder="Area Type" className="border p-1" />
-            <select value={area.roofPitch} onChange={(e) => updateArea(area.id, 'roofPitch', e.target.value)} className="border p-1">
+            <div><label className="block font-semibold">Area Type</label><input type="text" value={area.areaType} onChange={(e) => updateArea(area.id, 'areaType', e.target.value)} placeholder="Area Type" className="border p-1" />
+            </div><div><label className="block font-semibold">Roof Pitch</label><select value={area.roofPitch} onChange={(e) => updateArea(area.id, 'roofPitch', e.target.value)} className="border p-1">
               {Object.keys(pitchMultipliers).map(pitch => <option key={pitch}>{pitch}</option>)}
             </select>
-            <input type="number" value={area.length} onChange={(e) => updateArea(area.id, 'length', parseFloat(e.target.value))} placeholder="Length (ft)" className="border p-1" />
-            <input type="number" value={area.width} onChange={(e) => updateArea(area.id, 'width', parseFloat(e.target.value))} placeholder="Width (ft)" className="border p-1" />
-            <select value={area.foamType} onChange={(e) => updateArea(area.id, 'foamType', e.target.value)} className="border p-1">
+            </div><div><label className="block font-semibold">Length (ft)</label><input type="number" value={area.length} onChange={(e) => updateArea(area.id, 'length', parseFloat(e.target.value))} placeholder="Length (ft)" className="border p-1" />
+            </div><div><label className="block font-semibold">Width (ft)</label><input type="number" value={area.width} onChange={(e) => updateArea(area.id, 'width', parseFloat(e.target.value))} placeholder="Width (ft)" className="border p-1" />
+            </div><div><label className="block font-semibold">Foam Type</label><select value={area.foamType} onChange={(e) => {
+              const newType = e.target.value;
+              const thickness = newType === 'Open' ? 6 : 2;
+              const price = newType === 'Open' ? 1870 : 2470;
+              updateArea(area.id, 'foamType', newType);
+              updateArea(area.id, 'foamThickness', thickness);
+              updateArea(area.id, 'materialPrice', price);
+            }} className="border p-1">
               <option>Open</option>
               <option>Closed</option>
             </select>
-            <input type="number" value={area.foamThickness} onChange={(e) => updateArea(area.id, 'foamThickness', parseFloat(e.target.value))} placeholder="Thickness (in)" className="border p-1" />
+            </div><div><label className="block font-semibold">Foam Thickness (inches)</label><input type="number" value={area.foamThickness} onChange={(e) => updateArea(area.id, 'foamThickness', parseFloat(e.target.value))} placeholder="Thickness (in)" className="border p-1" />
           </div>
           <div>
-            <label>Material Price:</label>
+            <label className="block font-semibold">Material Price ($)</label>
             <input type="number" value={area.materialPrice} onChange={(e) => updateArea(area.id, 'materialPrice', parseFloat(e.target.value))} className="border p-1 ml-2" />
           </div>
           {areas.length > 1 && <button onClick={() => removeArea(area.id)} className="text-red-500">Remove</button>}
