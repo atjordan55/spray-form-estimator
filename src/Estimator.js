@@ -31,7 +31,6 @@ export default function Estimator() {
   const [laborMarkup, setLaborMarkup] = useState(30);
   const [complexity, setComplexity] = useState(1.0);
   const [discount, setDiscount] = useState(0);
-
   const [actualGallons, setActualGallons] = useState(0);
   const [actualManualHours, setActualManualHours] = useState(0);
   const [actualManualRate, setActualManualRate] = useState(0);
@@ -90,7 +89,6 @@ export default function Estimator() {
   const baseLaborCost = manualHours * manualRate;
   const travelCost = travelDistance * fuelCostPerMile;
   const baseCost = totalMaterialCost + baseLaborCost + wasteCost + equipmentCost + travelCost;
-
   const markedUpMaterial = totalMaterialCost * (1 + materialMarkup / 100);
   const markedUpLabor = baseLaborCost * (1 + laborMarkup / 100);
   const subtotal = markedUpMaterial + markedUpLabor + wasteCost + equipmentCost + travelCost;
@@ -106,145 +104,62 @@ export default function Estimator() {
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold mb-4">Spray Foam Estimator</h1>
 
-      {areas.map((area, index) => (
-        <div key={area.id} className="p-4 bg-gray-100 rounded shadow space-y-2">
-          <h2 className="font-semibold">Area #{index + 1}</h2>
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block font-semibold">Area Type</label>
-              <input type="text" value={area.areaType} onChange={(e) => updateArea(area.id, 'areaType', e.target.value)} className="border p-1 w-full" />
+      <div className="space-y-4">
+        {areas.map((area, index) => (
+          <div key={area.id} className="p-4 bg-gray-100 rounded shadow space-y-2">
+            <h2 className="font-semibold">Area #{index + 1}</h2>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block font-semibold">Area Type</label>
+                <input type="text" value={area.areaType} onChange={(e) => updateArea(area.id, 'areaType', e.target.value)} className="border p-1 w-full" />
+              </div>
+              <div>
+                <label className="block font-semibold">Roof Pitch</label>
+                <select value={area.roofPitch} onChange={(e) => updateArea(area.id, 'roofPitch', e.target.value)} className="border p-1 w-full">
+                  {Object.keys(pitchMultipliers).map(pitch => <option key={pitch}>{pitch}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block font-semibold">Length (ft)</label>
+                <input type="number" value={area.length} onChange={(e) => updateArea(area.id, 'length', parseFloat(e.target.value))} className="border p-1 w-full" />
+              </div>
+              <div>
+                <label className="block font-semibold">Width (ft)</label>
+                <input type="number" value={area.width} onChange={(e) => updateArea(area.id, 'width', parseFloat(e.target.value))} className="border p-1 w-full" />
+              </div>
+              <div>
+                <label className="block font-semibold">Foam Type</label>
+                <select value={area.foamType} onChange={(e) => {
+                  const newType = e.target.value;
+                  const thickness = newType === 'Open' ? 6 : 2;
+                  const price = newType === 'Open' ? 1870 : 2470;
+                  updateArea(area.id, 'foamType', newType);
+                  updateArea(area.id, 'foamThickness', thickness);
+                  updateArea(area.id, 'materialPrice', price);
+                }} className="border p-1 w-full">
+                  <option>Open</option>
+                  <option>Closed</option>
+                </select>
+              </div>
+              <div>
+                <label className="block font-semibold">Foam Thickness (in)</label>
+                <input type="number" value={area.foamThickness} onChange={(e) => updateArea(area.id, 'foamThickness', parseFloat(e.target.value))} className="border p-1 w-full" />
+              </div>
+              <div>
+                <label className="block font-semibold">Material Price ($)</label>
+                <input type="number" value={area.materialPrice} onChange={(e) => updateArea(area.id, 'materialPrice', parseFloat(e.target.value))} className="border p-1 w-full" />
+              </div>
             </div>
-            <div>
-              <label className="block font-semibold">Roof Pitch</label>
-              <select value={area.roofPitch} onChange={(e) => updateArea(area.id, 'roofPitch', e.target.value)} className="border p-1 w-full">
-                {Object.keys(pitchMultipliers).map(pitch => <option key={pitch}>{pitch}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block font-semibold">Length (ft)</label>
-              <input type="number" value={area.length} onChange={(e) => updateArea(area.id, 'length', parseFloat(e.target.value))} className="border p-1 w-full" />
-            </div>
-            <div>
-              <label className="block font-semibold">Width (ft)</label>
-              <input type="number" value={area.width} onChange={(e) => updateArea(area.id, 'width', parseFloat(e.target.value))} className="border p-1 w-full" />
-            </div>
-            <div>
-              <label className="block font-semibold">Foam Type</label>
-              <select value={area.foamType} onChange={(e) => {
-                const newType = e.target.value;
-                const thickness = newType === 'Open' ? 6 : 2;
-                const price = newType === 'Open' ? 1870 : 2470;
-                updateArea(area.id, 'foamType', newType);
-                updateArea(area.id, 'foamThickness', thickness);
-                updateArea(area.id, 'materialPrice', price);
-              }} className="border p-1 w-full">
-                <option>Open</option>
-                <option>Closed</option>
-              </select>
-            </div>
-            <div>
-              <label className="block font-semibold">Foam Thickness (in)</label>
-              <input type="number" value={area.foamThickness} onChange={(e) => updateArea(area.id, 'foamThickness', parseFloat(e.target.value))} className="border p-1 w-full" />
-            </div>
-            <div>
-              <label className="block font-semibold">Material Price ($)</label>
-              <input type="number" value={area.materialPrice} onChange={(e) => updateArea(area.id, 'materialPrice', parseFloat(e.target.value))} className="border p-1 w-full" />
-            </div>
+            {areas.length > 1 && (
+              <button onClick={() => removeArea(area.id)} className="text-red-500">Remove</button>
+            )}
           </div>
-          {areas.length > 1 && (
-            <button onClick={() => removeArea(area.id)} className="text-red-500">Remove</button>
-          )}
-        </div>
-      ))}
+        ))}
 
-      <button onClick={addArea} className="bg-blue-500 text-white px-4 py-2 rounded">Add Area</button>
-
-      {/* Additional sections go here */}
-    </div>
-  );
-}
-
-      <div className="grid grid-cols-3 gap-4">
-        <div>
-          <label className="block font-semibold">Manual Labor Rate ($/hr)</label>
-          <input type="number" value={manualRate} onChange={(e) => setManualRate(parseFloat(e.target.value))} className="border p-1 w-full" />
-        </div>
-        <div>
-          <label className="block font-semibold">Manual Labor Hours</label>
-          <input type="number" value={manualHours} onChange={(e) => setManualHours(parseFloat(e.target.value))} className="border p-1 w-full" />
-        </div>
-        <div>
-          <label className="block font-semibold">Equipment Rental ($)</label>
-          <input type="number" value={equipmentCost} onChange={(e) => setEquipmentCost(parseFloat(e.target.value))} className="border p-1 w-full" />
-        </div>
-        <div>
-          <label className="block font-semibold">Waste Disposal ($)</label>
-          <input type="number" value={wasteCost} onChange={(e) => setWasteCost(parseFloat(e.target.value))} className="border p-1 w-full" />
-        </div>
-        <div>
-          <label className="block font-semibold">Travel Distance (miles)</label>
-          <input type="number" value={travelDistance} onChange={(e) => setTravelDistance(parseFloat(e.target.value))} className="border p-1 w-full" />
-        </div>
-        <div>
-          <label className="block font-semibold">Fuel Cost per Mile ($)</label>
-          <input type="number" value={fuelCostPerMile} onChange={(e) => setFuelCostPerMile(parseFloat(e.target.value))} className="border p-1 w-full" />
-        </div>
-        <div>
-          <label className="block font-semibold">Material Markup (%)</label>
-          <input type="number" value={materialMarkup} onChange={(e) => setMaterialMarkup(parseFloat(e.target.value))} className="border p-1 w-full" />
-        </div>
-        <div>
-          <label className="block font-semibold">Labor Markup (%)</label>
-          <input type="number" value={laborMarkup} onChange={(e) => setLaborMarkup(parseFloat(e.target.value))} className="border p-1 w-full" />
-        </div>
-        <div>
-          <label className="block font-semibold">Complexity Multiplier</label>
-          <input type="number" value={complexity} onChange={(e) => setComplexity(parseFloat(e.target.value))} className="border p-1 w-full" />
-        </div>
-        <div>
-          <label className="block font-semibold">Discount (%)</label>
-          <input type="number" value={discount} onChange={(e) => setDiscount(parseFloat(e.target.value))} className="border p-1 w-full" />
-        </div>
+        <button onClick={addArea} className="bg-blue-500 text-white px-4 py-2 rounded">Add Area</button>
       </div>
 
-      <div className="bg-green-100 p-4 rounded shadow space-y-2">
-        <h2 className="text-lg font-bold">Estimate Output</h2>
-        <p><strong>Total Area (sq ft):</strong> {totalSqFt.toFixed(2)}</p>
-        <p><strong>Estimated Gallons:</strong> {totalGallons.toFixed(2)}</p>
-        <p><strong>Total Material Cost:</strong> ${totalMaterialCost.toFixed(2)}</p>
-        <p><strong>Total Labor Cost (Base):</strong> ${baseLaborCost.toFixed(2)}</p>
-        <p><strong>Marked-Up Material Cost:</strong> ${markedUpMaterial.toFixed(2)}</p>
-        <p><strong>Marked-Up Labor Cost:</strong> ${markedUpLabor.toFixed(2)}</p>
-        <p><strong>Travel Cost:</strong> ${travelCost.toFixed(2)}</p>
-        <p><strong>Grand Total:</strong> ${grandTotal.toFixed(2)}</p>
-        <p><strong>Profit Margin:</strong> {profitMargin.toFixed(2)}%</p>
-      </div>
-
-      <div className="bg-white p-4 rounded shadow-md grid grid-cols-2 gap-4">
-        <h2 className="text-xl font-bold col-span-2">Actuals Entry</h2>
-        <div>
-          <label className="block font-semibold">Actual Gallons Used</label>
-          <input className="border p-1 w-full" type="number" value={actualGallons} onChange={(e) => setActualGallons(parseFloat(e.target.value))} />
-        </div>
-        <div>
-          <label className="block font-semibold">Actual Manual Hours</label>
-          <input className="border p-1 w-full" type="number" value={actualManualHours} onChange={(e) => setActualManualHours(parseFloat(e.target.value))} />
-        </div>
-        <div>
-          <label className="block font-semibold">Actual Labor Rate (Optional)</label>
-          <input className="border p-1 w-full" type="number" value={actualManualRate} onChange={(e) => setActualManualRate(parseFloat(e.target.value))} />
-        </div>
-      </div>
-
-      <div className="bg-gray-100 p-4 rounded shadow-md">
-        <h2 className="text-xl font-bold mb-4">Actual vs Estimated Comparison</h2>
-        <p><strong>Actual Gallons Used:</strong> {actualGallons} (Estimated: {totalGallons.toFixed(2)})</p>
-        <p><strong>Actual Material Cost:</strong> ${actualMaterialCost.toFixed(2)}</p>
-        <p><strong>Actual Manual Labor Hours:</strong> {actualManualHours} (Estimated: {manualHours})</p>
-        <p><strong>Actual Labor Cost:</strong> ${actualLaborCost.toFixed(2)}</p>
-        <p><strong>Material Cost Variance:</strong> ${(actualMaterialCost - totalMaterialCost).toFixed(2)}</p>
-        <p><strong>Labor Cost Variance:</strong> ${(actualLaborCost - baseLaborCost).toFixed(2)}</p>
-      </div>
+      <div className="text-sm text-gray-500">* All costs are estimated. Please verify with actual job data.</div>
     </div>
   );
 }
