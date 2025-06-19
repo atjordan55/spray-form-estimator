@@ -1,22 +1,11 @@
-// Spray Foam Estimator - Complete UI with Actuals Comparison
-// React + Tailwind CSS
 
 import React, { useState } from "react";
 
 export default function Estimator() {
   const pitchMultipliers = {
-    "1/12": 1.003,
-    "2/12": 1.014,
-    "3/12": 1.031,
-    "4/12": 1.054,
-    "5/12": 1.083,
-    "6/12": 1.118,
-    "7/12": 1.158,
-    "8/12": 1.202,
-    "9/12": 1.25,
-    "10/12": 1.302,
-    "11/12": 1.357,
-    "12/12": 1.414
+    "1/12": 1.003, "2/12": 1.014, "3/12": 1.031, "4/12": 1.054,
+    "5/12": 1.083, "6/12": 1.118, "7/12": 1.158, "8/12": 1.202,
+    "9/12": 1.25, "10/12": 1.302, "11/12": 1.357, "12/12": 1.414
   };
 
   const [areas, setAreas] = useState([
@@ -32,142 +21,130 @@ export default function Estimator() {
     }
   ]);
 
-  const [manualRate, setManualRate] = useState(0);
+  const [manualRate, setManualRate] = useState(25);
   const [manualHours, setManualHours] = useState(0);
   const [wasteCost, setWasteCost] = useState(0);
   const [equipmentCost, setEquipmentCost] = useState(0);
   const [travelDistance, setTravelDistance] = useState(0);
-  const [fuelCostPerMile, setFuelCostPerMile] = useState(0.68);
-  const [materialMarkup, setMaterialMarkup] = useState(50);
-  const [laborMarkup, setLaborMarkup] = useState(30);
-  const [complexity, setComplexity] = useState(1.0);
-  const [discount, setDiscount] = useState(0);
+  const [fuelCostPerMile, setFuelCostPerMile] = useState(0.67);
+  const [finalCharge, setFinalCharge] = useState(0);
 
   const [actualGallons, setActualGallons] = useState(0);
-  const [actualManualHours, setActualManualHours] = useState(0);
-  const [actualManualRate, setActualManualRate] = useState(0);
+  const [actualLaborHours, setActualLaborHours] = useState(0);
+  const [actualLaborRate, setActualLaborRate] = useState(0);
+  const [adjustedProfit, setAdjustedProfit] = useState(0);
+  const [adjustedMargin, setAdjustedMargin] = useState(0);
 
-  const gallonsPerSet = 55;
+  const calculateEstimate = () => {
+    const setSize = 55;
+    let totalSqFt = 0;
+    let totalGallons = 0;
 
-  const updateArea = (id, field, value) => {
-    setAreas((prev) =>
-      prev.map((area) => (area.id === id ? { ...area, [field]: value } : area))
-    );
+    areas.forEach((area) => {
+      const sqFt = area.length * area.width * pitchMultipliers[area.roofPitch];
+      totalSqFt += sqFt;
+      const thicknessFactor = area.foamThickness / (area.foamType === "Open" ? 6 : 2);
+      totalGallons += (sqFt / 2000) * thicknessFactor * setSize;
+    });
+
+    const setsNeeded = totalGallons / setSize;
+    const materialCost = setsNeeded * (areas[0].foamType === "Open" ? 1870 : 2470);
+    const laborCost = manualHours * manualRate;
+    const travelCost = travelDistance * fuelCostPerMile;
+    const baseCost = materialCost + laborCost + travelCost + wasteCost + equipmentCost;
+    const markup = 1.5;
+    const charge = baseCost * markup;
+
+    setFinalCharge(charge.toFixed(2));
   };
 
-  const addArea = () => {
-    setAreas((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        areaType: "General Area",
-        roofPitch: "1/12",
-        length: 0,
-        width: 0,
-        foamType: "Open",
-        foamThickness: 6,
-        materialPrice: 1870
-      }
-    ]);
+  const calculateAdjusted = () => {
+    const matCost = areas[0]?.foamType === "Open" ? 1870 : 2470;
+    const adjustedMaterial = (actualGallons / 55) * matCost;
+    const rateToUse = actualLaborRate || manualRate;
+    const adjustedLabor = actualLaborHours * rateToUse;
+    const otherCosts = wasteCost + equipmentCost + (travelDistance * fuelCostPerMile);
+    const totalAdjusted = adjustedMaterial + adjustedLabor + otherCosts;
+    const profit = finalCharge - totalAdjusted;
+    const margin = (profit / finalCharge) * 100;
+
+    setAdjustedProfit(profit.toFixed(2));
+    setAdjustedMargin(margin.toFixed(2));
   };
 
-  const removeArea = (id) => {
-    setAreas((prev) => prev.filter((a) => a.id !== id));
-  };
+  const handlePrint = () => window.print();
 
-  let totalGallons = 0;
-  let totalMaterialCost = 0;
-
-  const areaOutputs = areas.map((area) => {
-    const boardFeetPerSet = area.foamType === "Open" ? 12000 : 4000;
-    const pitchMultiplier = pitchMultipliers[area.roofPitch] || 1.0;
-    const rawArea = area.length * area.width;
-    const calcArea =
-      area.areaType === "Roof Deck"
-        ? rawArea * pitchMultiplier
-        : area.areaType === "Gable Ends"
-        ? rawArea / 2
-        : rawArea;
-
-    const requiredBoardFeet = calcArea * area.foamThickness;
-    const gallonsNeeded = (requiredBoardFeet / boardFeetPerSet) * gallonsPerSet;
-    const baseMatCost = (area.materialPrice / gallonsPerSet) * gallonsNeeded;
-
-    totalGallons += gallonsNeeded;
-    totalMaterialCost += baseMatCost;
-
-    return {
-      ...area,
-      area: calcArea,
-      gallons: gallonsNeeded,
-      baseCost: baseMatCost
+  const handleDownload = () => {
+    const data = {
+      areas, manualRate, manualHours, wasteCost, equipmentCost,
+      travelDistance, fuelCostPerMile, finalCharge,
+      actualGallons, actualLaborHours, adjustedProfit, adjustedMargin
     };
-  });
-
-  const markedMaterialCost = totalMaterialCost * (1 + materialMarkup / 100);
-  const baseLaborCost = manualRate * manualHours;
-  const markedLaborCost = baseLaborCost * (1 + laborMarkup / 100);
-  const fuelCost = travelDistance * fuelCostPerMile;
-
-  const totalBaseCost = totalMaterialCost + baseLaborCost + wasteCost + equipmentCost + fuelCost;
-  const totalCostBeforeDiscount = (markedMaterialCost + markedLaborCost + wasteCost + equipmentCost + fuelCost) * complexity;
-  const totalCostAfterDiscount = totalCostBeforeDiscount * (1 - discount / 100);
-
-  const revenue = totalCostAfterDiscount;
-  const royalty = revenue * 0.06;
-  const brandFund = revenue * 0.01;
-  const salesCommission = revenue * 0.03;
-  const totalFees = royalty + brandFund + salesCommission;
-
-  const profit = revenue - totalFees - totalBaseCost;
-  const profitMargin = (profit / revenue) * 100;
-
-  const actualMaterialCost = actualGallons * (totalMaterialCost / totalGallons);
-  const actualLaborCost = actualManualHours * (actualManualRate || manualRate);
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "estimate.json";
+    link.click();
+  };
 
   return (
-    <div className="space-y-6">
-      {/* ...existing content omitted for brevity... */}
+    <div className="p-6 space-y-4 print:bg-white print:text-black">
+      <h1 className="text-xl font-bold">Spray Foam Estimator</h1>
 
-      <div className="bg-white p-4 rounded shadow-md grid grid-cols-2 gap-4">
-        <h2 className="text-xl font-bold col-span-2">Actuals Entry</h2>
-        <div>
-          <label className="block font-semibold">Actual Gallons Used</label>
-          <input
-            className="border p-1 w-full"
-            type="number"
-            value={actualGallons}
-            onChange={(e) => setActualGallons(parseFloat(e.target.value))}
-          />
-        </div>
-        <div>
-          <label className="block font-semibold">Actual Manual Hours</label>
-          <input
-            className="border p-1 w-full"
-            type="number"
-            value={actualManualHours}
-            onChange={(e) => setActualManualHours(parseFloat(e.target.value))}
-          />
-        </div>
-        <div>
-          <label className="block font-semibold">Actual Labor Rate (Optional)</label>
-          <input
-            className="border p-1 w-full"
-            type="number"
-            value={actualManualRate}
-            onChange={(e) => setActualManualRate(parseFloat(e.target.value))}
-          />
-        </div>
+      <div>
+        <label>Manual Rate: $</label>
+        <input type="number" value={manualRate} onChange={(e) => setManualRate(+e.target.value)} className="border p-1" />
+      </div>
+      <div>
+        <label>Manual Hours:</label>
+        <input type="number" value={manualHours} onChange={(e) => setManualHours(+e.target.value)} className="border p-1" />
+      </div>
+      <div>
+        <label>Travel Distance (miles):</label>
+        <input type="number" value={travelDistance} onChange={(e) => setTravelDistance(+e.target.value)} className="border p-1" />
+      </div>
+      <div>
+        <label>Fuel Cost per Mile: $</label>
+        <input type="number" value={fuelCostPerMile} onChange={(e) => setFuelCostPerMile(+e.target.value)} className="border p-1" />
+      </div>
+      <div>
+        <label>Waste Cost: $</label>
+        <input type="number" value={wasteCost} onChange={(e) => setWasteCost(+e.target.value)} className="border p-1" />
+      </div>
+      <div>
+        <label>Equipment Cost: $</label>
+        <input type="number" value={equipmentCost} onChange={(e) => setEquipmentCost(+e.target.value)} className="border p-1" />
       </div>
 
-      <div className="bg-gray-100 p-4 rounded shadow-md">
-        <h2 className="text-xl font-bold mb-4">Actual vs Estimated Comparison</h2>
-        <p><strong>Actual Gallons Used:</strong> {actualGallons} (Estimated: {totalGallons.toFixed(2)})</p>
-        <p><strong>Actual Material Cost:</strong> ${actualMaterialCost.toFixed(2)}</p>
-        <p><strong>Actual Manual Labor Hours:</strong> {actualManualHours} (Estimated: {manualHours})</p>
-        <p><strong>Actual Labor Cost:</strong> ${actualLaborCost.toFixed(2)}</p>
-        <p><strong>Material Cost Variance:</strong> ${(actualMaterialCost - totalMaterialCost).toFixed(2)}</p>
-        <p><strong>Labor Cost Variance:</strong> ${(actualLaborCost - baseLaborCost).toFixed(2)}</p>
+      <button onClick={calculateEstimate} className="bg-blue-500 text-white px-4 py-2 rounded">Estimate</button>
+      <div>
+        <strong>Final Charge:</strong> ${finalCharge}
+      </div>
+
+      <hr />
+      <h2 className="text-lg font-semibold">Actuals Entry</h2>
+      <div>
+        <label>Actual Gallons Used:</label>
+        <input type="number" value={actualGallons} onChange={(e) => setActualGallons(+e.target.value)} className="border p-1" />
+      </div>
+      <div>
+        <label>Actual Manual Hours:</label>
+        <input type="number" value={actualLaborHours} onChange={(e) => setActualLaborHours(+e.target.value)} className="border p-1" />
+      </div>
+      <div>
+        <label>Actual Labor Rate (Optional):</label>
+        <input type="number" value={actualLaborRate} onChange={(e) => setActualLaborRate(+e.target.value)} className="border p-1" />
+      </div>
+      <button onClick={calculateAdjusted} className="bg-purple-600 text-white px-4 py-2 rounded mt-2">Calculate Adjusted Profit</button>
+
+      <div className="mt-4">
+        <strong>Adjusted Profit:</strong> ${adjustedProfit} <br />
+        <strong>Adjusted Margin:</strong> {adjustedMargin}%
+      </div>
+
+      <div className="space-x-4 mt-4">
+        <button onClick={handlePrint} className="bg-green-500 text-white px-4 py-2 rounded">Print Estimate</button>
+        <button onClick={handleDownload} className="bg-gray-700 text-white px-4 py-2 rounded">Download JSON</button>
       </div>
     </div>
   );
