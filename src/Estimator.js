@@ -135,6 +135,10 @@ export default function SprayFoamEstimator() {
   const [materialPriceFocused, setMaterialPriceFocused] = useState({});
   const [actualsInputs, setActualsInputs] = useState({});
   const [actualsFocused, setActualsFocused] = useState({});
+  const [jobberConnected, setJobberConnected] = useState(false);
+  const [jobberLoading, setJobberLoading] = useState(false);
+  const [jobberError, setJobberError] = useState("");
+  const [jobberSuccess, setJobberSuccess] = useState("");
 
   useEffect(() => {
     const saved = localStorage.getItem('recentEstimates');
@@ -145,7 +149,46 @@ export default function SprayFoamEstimator() {
         console.error('Failed to load recent estimates');
       }
     }
+    
+    checkJobberStatus();
+    
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('jobber_connected') === 'true') {
+      setJobberConnected(true);
+      setJobberSuccess('Successfully connected to Jobber!');
+      window.history.replaceState({}, '', window.location.pathname);
+      setTimeout(() => setJobberSuccess(''), 5000);
+    }
+    if (params.get('jobber_error')) {
+      setJobberError('Failed to connect to Jobber: ' + params.get('jobber_error'));
+      window.history.replaceState({}, '', window.location.pathname);
+    }
   }, []);
+  
+  const checkJobberStatus = async () => {
+    try {
+      const response = await fetch('/api/jobber/status');
+      const data = await response.json();
+      setJobberConnected(data.connected);
+    } catch (err) {
+      console.error('Failed to check Jobber status');
+    }
+  };
+  
+  const connectToJobber = () => {
+    window.location.href = '/auth/jobber';
+  };
+  
+  const disconnectFromJobber = async () => {
+    try {
+      await fetch('/api/jobber/disconnect', { method: 'POST' });
+      setJobberConnected(false);
+      setJobberSuccess('Disconnected from Jobber');
+      setTimeout(() => setJobberSuccess(''), 3000);
+    } catch (err) {
+      setJobberError('Failed to disconnect');
+    }
+  };
 
   useEffect(() => {
     if (customerInfo.name && !estimateNameManuallyEdited) {
@@ -559,6 +602,118 @@ export default function SprayFoamEstimator() {
   const handlePrint = () => {
     window.print();
   };
+  
+  const sendToJobber = async () => {
+    if (!jobberConnected) {
+      setJobberError('Please connect to Jobber first');
+      return;
+    }
+    
+    setJobberLoading(true);
+    setJobberError('');
+    setJobberSuccess('');
+    
+    try {
+      const clientResponse = await fetch('/api/jobber/find-or-create-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: customerInfo.name || 'Unknown Customer',
+          email: customerInfo.email,
+          phone: customerInfo.phone,
+          address: customerInfo.address,
+        }),
+      });
+      
+      if (!clientResponse.ok) {
+        const err = await clientResponse.json();
+        throw new Error(err.error || 'Failed to create client');
+      }
+      
+      const { client, propertyId } = await clientResponse.json();
+      
+      if (!propertyId) {
+        throw new Error('Could not find or create a property for this client. Please ensure an address is provided or add a property in Jobber.');
+      }
+      
+      const lineItems = [];
+      
+      const getLineItemDescription = (area, foamApp, rValue) => {
+        const thickness = foamApp.foamThickness;
+        const rValueFormatted = rValue.toFixed(1);
+        
+        if (area.areaType === "Exterior Walls" && foamApp.foamType === "Closed") {
+          return `Closed-cell spray foam insulation applied at an average depth of ${thickness} inches within exterior wall cavities, creating a high-performance thermal barrier, moisture seal, and structural enhancement. Includes sealing around all windows and doors as well as sealing bottom plates.\n[Resulting in an effective R-Value of ${rValueFormatted}]`;
+        }
+        if (area.areaType === "Exterior Walls" && foamApp.foamType === "Open") {
+          return `Open-cell spray foam insulation applied at an average depth of ${thickness} inches within exterior wall cavities, creating a high performance air seal, sound deadening, and high level thermal resistance. Includes sealing around all windows and doors as well as sealing bottom plates.\n[Resulting in an effective R-Value of ${rValueFormatted}]`;
+        }
+        if (area.areaType === "Roof Deck" && foamApp.foamType === "Closed") {
+          return `Closed-cell spray foam insulation applied at an average depth of ${thickness} inches to the underside of the roof deck, providing a high-performance air seal, moisture barrier, and superior thermal resistance.\n[Resulting in an effective R-Value of ${rValueFormatted}]`;
+        }
+        if (area.areaType === "Roof Deck" && foamApp.foamType === "Open") {
+          return `Open cell spray foam applied at an average depth of ${thickness} inches to the underside of the roof deck, providing a high performance air seal, sound deadening, and high level thermal resistance.\n[Resulting in an effective R-Value of ${rValueFormatted}]`;
+        }
+        return '';
+      };
+      
+      sprayAreas.forEach(area => {
+        area.foamApplications.forEach(foamApp => {
+          const calcs = calculateFoamApplicationCost(area, foamApp);
+          const sqft = Math.round(calcs.sqft);
+          const pricePerSqFt = calcs.pricePerSqFt || (sqft > 0 ? calcs.totalCost / sqft : 0);
+          const description = getLineItemDescription(area, foamApp, calcs.rValue);
+          
+          lineItems.push({
+            name: `${area.name} (${foamApp.foamType} Cell ${foamApp.foamThickness}in)`,
+            description,
+            quantity: sqft,
+            unitPrice: pricePerSqFt,
+          });
+        });
+      });
+      
+      const laborTotal = baseLaborCost + laborMarkupAmount;
+      if (laborTotal > 0) {
+        lineItems.push({
+          name: 'Complete Spray Foam Insulation Solution',
+          description: 'Includes a full-service spray foam insulation package: on-site evaluation, masking and surface prep, application of open or closed cell spray foam at the specified thickness, and post-job cleanup. Designed to deliver maximum R-value, air sealing, and moisture control for residential or commercial projects.',
+          quantity: 1,
+          unitPrice: laborTotal,
+        });
+      }
+      
+      const quoteResponse = await fetch('/api/jobber/create-quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: client.id,
+          propertyId,
+          title: estimateName || 'Spray Foam Estimate',
+          lineItems,
+          notes: projectNotes,
+        }),
+      });
+      
+      if (!quoteResponse.ok) {
+        const err = await quoteResponse.json();
+        throw new Error(err.error || 'Failed to create quote');
+      }
+      
+      const { quote } = await quoteResponse.json();
+      
+      setJobberSuccess(`Quote #${quote.quoteNumber} created successfully!`);
+      setTimeout(() => setJobberSuccess(''), 10000);
+      
+      if (quote.jobberWebUri) {
+        window.open(quote.jobberWebUri, '_blank');
+      }
+    } catch (err) {
+      setJobberError(err.message);
+    } finally {
+      setJobberLoading(false);
+    }
+  };
 
   const totalGallons = { open: 0, closed: 0 };
   const totalSets = { open: 0, closed: 0 };
@@ -676,8 +831,48 @@ export default function SprayFoamEstimator() {
                   Load
                   <input type="file" accept="application/json" onChange={loadEstimate} className="hidden" />
                 </label>
+                {jobberConnected ? (
+                  <>
+                    <button 
+                      onClick={sendToJobber} 
+                      disabled={jobberLoading}
+                      className="bg-orange-500 hover:bg-orange-600 text-white px-4 md:px-6 py-2 md:py-3 rounded-lg font-medium transition-colors text-sm md:text-base disabled:opacity-50"
+                    >
+                      {jobberLoading ? 'Sending...' : 'Send to Jobber'}
+                    </button>
+                    <button 
+                      onClick={disconnectFromJobber}
+                      disabled={jobberLoading}
+                      className="bg-red-500 hover:bg-red-600 text-white px-4 md:px-6 py-2 md:py-3 rounded-lg font-medium transition-colors text-sm md:text-base disabled:opacity-50"
+                    >
+                      Disconnect
+                    </button>
+                  </>
+                ) : (
+                  <button 
+                    onClick={connectToJobber}
+                    className="bg-orange-500 hover:bg-orange-600 text-white px-4 md:px-6 py-2 md:py-3 rounded-lg font-medium transition-colors text-sm md:text-base"
+                  >
+                    Connect Jobber
+                  </button>
+                )}
               </div>
             </div>
+            
+            {/* Jobber Status Messages */}
+            {(jobberError || jobberSuccess) && (
+              <div className={`p-3 rounded-lg ${jobberError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'} no-print`}>
+                {jobberError || jobberSuccess}
+                {jobberConnected && !jobberLoading && (
+                  <button 
+                    onClick={disconnectFromJobber}
+                    className="ml-4 text-sm underline hover:no-underline"
+                  >
+                    Disconnect
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Date Fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -961,7 +1156,7 @@ export default function SprayFoamEstimator() {
                             onChange={(e) => updateArea(areaIndex, 'areaType', e.target.value)}
                             className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           >
-                            {["General Area", "Roof Deck", "Gable"].map(opt => (
+                            {["General Area", "Exterior Walls", "Roof Deck", "Gable"].map(opt => (
                               <option key={opt} value={opt}>{opt}</option>
                             ))}
                           </select>
