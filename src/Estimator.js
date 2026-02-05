@@ -104,7 +104,10 @@ const getDefaultState = () => ({
   actuals: {
     actualLaborHours: null,
     actualOpenGallons: null,
-    actualClosedGallons: null
+    actualClosedGallons: null,
+    actualFuelCost: null,
+    actualWasteDisposal: null,
+    actualEquipmentRental: null
   }
 });
 
@@ -139,6 +142,12 @@ export default function SprayFoamEstimator() {
   const [jobberLoading, setJobberLoading] = useState(false);
   const [jobberError, setJobberError] = useState("");
   const [jobberSuccess, setJobberSuccess] = useState("");
+  const [discountDollar, setDiscountDollar] = useState(0);
+  const [discountPercent, setDiscountPercent] = useState(0);
+  const [discountDollarInput, setDiscountDollarInput] = useState("");
+  const [discountPercentInput, setDiscountPercentInput] = useState("");
+  const [discountDollarFocused, setDiscountDollarFocused] = useState(false);
+  const [discountPercentFocused, setDiscountPercentFocused] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('recentEstimates');
@@ -337,6 +346,50 @@ export default function SprayFoamEstimator() {
     }
   };
 
+  const handleDiscountDollarChange = (value, totalJobCostValue) => {
+    const dollarValue = parseFloat(value) || 0;
+    const validDollar = Math.max(0, Math.min(dollarValue, totalJobCostValue));
+    setDiscountDollar(validDollar);
+    setDiscountDollarInput(value);
+    if (totalJobCostValue > 0) {
+      const percentValue = (validDollar / totalJobCostValue) * 100;
+      setDiscountPercent(percentValue);
+      setDiscountPercentInput(percentValue.toFixed(2));
+    }
+  };
+
+  const handleDiscountPercentChange = (value, totalJobCostValue) => {
+    const percentValue = parseFloat(value) || 0;
+    const validPercent = Math.max(0, Math.min(percentValue, 100));
+    setDiscountPercent(validPercent);
+    setDiscountPercentInput(value);
+    const dollarValue = (validPercent / 100) * totalJobCostValue;
+    setDiscountDollar(dollarValue);
+    setDiscountDollarInput(dollarValue.toFixed(2));
+  };
+
+  const handleDiscountDollarBlur = (totalJobCostValue) => {
+    setDiscountDollarFocused(false);
+    const validDollar = Math.max(0, Math.min(discountDollar, totalJobCostValue));
+    setDiscountDollar(validDollar);
+    setDiscountDollarInput(validDollar.toFixed(2));
+    if (totalJobCostValue > 0) {
+      const percentValue = (validDollar / totalJobCostValue) * 100;
+      setDiscountPercent(percentValue);
+      setDiscountPercentInput(percentValue.toFixed(2));
+    }
+  };
+
+  const handleDiscountPercentBlur = (totalJobCostValue) => {
+    setDiscountPercentFocused(false);
+    const validPercent = Math.max(0, Math.min(discountPercent, 100));
+    setDiscountPercent(validPercent);
+    setDiscountPercentInput(validPercent.toFixed(2));
+    const dollarValue = (validPercent / 100) * totalJobCostValue;
+    setDiscountDollar(dollarValue);
+    setDiscountDollarInput(dollarValue.toFixed(2));
+  };
+
   const handleActualsChange = (key, value) => {
     const parsed = parseFloat(value);
     setActuals({ ...actuals, [key]: isNaN(parsed) ? null : Math.max(0, parsed) });
@@ -499,6 +552,10 @@ export default function SprayFoamEstimator() {
       setMaterialPriceFocused({});
       setActualsInputs({});
       setActualsFocused({});
+      setDiscountDollar(0);
+      setDiscountPercent(0);
+      setDiscountDollarInput("");
+      setDiscountPercentInput("");
     }
   };
 
@@ -744,7 +801,8 @@ export default function SprayFoamEstimator() {
   const baseLaborCost = globalInputs.laborHours * globalInputs.manualLaborRate;
   const totalBaseCost = baseMaterialCost + baseLaborCost + fuelCost + globalInputs.wasteDisposal + globalInputs.equipmentRental;
   const laborMarkupAmount = baseLaborCost * (globalInputs.laborMarkup / 100);
-  const customerCost = totalBaseCost + materialMarkupAmount + laborMarkupAmount;
+  const totalJobCost = totalBaseCost + materialMarkupAmount + laborMarkupAmount;
+  const customerCost = totalJobCost - discountDollar;
   
   const netProfitBeforeCommission = customerCost - totalBaseCost;
   const profitMarginBeforeCommission = customerCost > 0 ? (netProfitBeforeCommission / customerCost) * 100 : 0;
@@ -766,21 +824,37 @@ export default function SprayFoamEstimator() {
   const effectiveActualLaborHours = actuals.actualLaborHours ?? globalInputs.laborHours;
   const effectiveActualOpenGallons = actuals.actualOpenGallons ?? totalGallons.open;
   const effectiveActualClosedGallons = actuals.actualClosedGallons ?? totalGallons.closed;
+  const effectiveActualFuelCost = actuals.actualFuelCost ?? fuelCost;
+  const effectiveActualWasteDisposal = actuals.actualWasteDisposal ?? globalInputs.wasteDisposal;
+  const effectiveActualEquipmentRental = actuals.actualEquipmentRental ?? globalInputs.equipmentRental;
 
   const actualMaterialCost = (effectiveActualOpenGallons / 100) * (1870 * 1.20) + (effectiveActualClosedGallons / 100) * (2470 * 1.20);
   const actualLaborCost = effectiveActualLaborHours * globalInputs.manualLaborRate;
-  const actualBaseCost = actualMaterialCost + actualLaborCost + fuelCost + globalInputs.wasteDisposal + globalInputs.equipmentRental;
+  const actualBaseCost = actualMaterialCost + actualLaborCost + effectiveActualFuelCost + effectiveActualWasteDisposal + effectiveActualEquipmentRental;
   const actualCustomerCost = customerCost;
   
   const actualNetProfitBeforeCommission = actualCustomerCost - actualBaseCost;
   const actualProfitMarginBeforeCommission = actualCustomerCost > 0 ? (actualNetProfitBeforeCommission / actualCustomerCost) * 100 : 0;
   
   const actualSalesCommission = calculateSalesCommission(actualNetProfitBeforeCommission, actualProfitMarginBeforeCommission);
-  const actualFees = actualSalesCommission;
-  const actualProfit = actualCustomerCost - actualBaseCost - actualFees;
+  const actualTotalFees = actualSalesCommission;
+  const actualProfit = actualCustomerCost - actualBaseCost - actualTotalFees;
   const actualMargin = actualCustomerCost > 0 ? (actualProfit / actualCustomerCost) * 100 : 0;
   const marginColor = profitMargin < 25 ? "text-red-600" : profitMargin < 30 ? "text-yellow-600" : "text-green-600";
   const actualMarginColor = actualMargin < 25 ? "text-red-600" : actualMargin < 30 ? "text-yellow-600" : "text-green-600";
+
+  // Color logic for comparing actual vs estimated costs
+  const getComparisonColor = (actual, estimated, inverse = false) => {
+    if (actual === estimated) return "";
+    if (inverse) {
+      return actual < estimated ? "text-green-600" : "text-red-600";
+    }
+    return actual < estimated ? "text-green-600" : "text-red-600";
+  };
+  
+  const actualMaterialCostColor = getComparisonColor(actualMaterialCost, baseMaterialCost);
+  const actualLaborCostColor = getComparisonColor(actualLaborCost, baseLaborCost);
+  const actualBaseCostColor = getComparisonColor(actualBaseCost, totalBaseCost);
   
   const getJobNetProfitColor = (margin) => {
     if (margin >= 35) return "text-green-600";
@@ -1074,6 +1148,52 @@ export default function SprayFoamEstimator() {
                     </div>
                   );
                 })}
+              </div>
+              
+              {/* Discount Section */}
+              <div className="mt-6 pt-4 border-t border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Discount</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Discount ($)
+                      <Tooltip text="Dollar amount to discount from the total job cost" />
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={discountDollarFocused ? discountDollarInput : (discountDollar === 0 ? "" : discountDollar.toFixed(2))}
+                      onChange={(e) => handleDiscountDollarChange(e.target.value, totalJobCost)}
+                      onFocus={() => {
+                        setDiscountDollarFocused(true);
+                        setDiscountDollarInput(discountDollar === 0 ? "" : discountDollar.toFixed(2));
+                      }}
+                      onBlur={() => handleDiscountDollarBlur(totalJobCost)}
+                      className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Discount (%)
+                      <Tooltip text="Percentage to discount from the total job cost" />
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="100"
+                      value={discountPercentFocused ? discountPercentInput : (discountPercent === 0 ? "" : discountPercent.toFixed(2))}
+                      onChange={(e) => handleDiscountPercentChange(e.target.value, totalJobCost)}
+                      onFocus={() => {
+                        setDiscountPercentFocused(true);
+                        setDiscountPercentInput(discountPercent === 0 ? "" : discountPercent.toFixed(2));
+                      }}
+                      onBlur={() => handleDiscountPercentBlur(totalJobCost)}
+                      className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1541,6 +1661,101 @@ export default function SprayFoamEstimator() {
                   />
                 </div>
               </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Actual Fuel Cost ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={actualsFocused.fuelCost 
+                      ? actualsInputs.fuelCost 
+                      : (actuals.actualFuelCost !== null 
+                          ? (actuals.actualFuelCost === 0 ? "" : actuals.actualFuelCost.toFixed(2)) 
+                          : (fuelCost === 0 ? "" : fuelCost.toFixed(2)))}
+                    onChange={(e) => setActualsInputs(prev => ({ ...prev, fuelCost: e.target.value }))}
+                    onFocus={() => {
+                      setActualsFocused(prev => ({ ...prev, fuelCost: true }));
+                      const currentVal = actuals.actualFuelCost !== null ? actuals.actualFuelCost : fuelCost;
+                      setActualsInputs(prev => ({ ...prev, fuelCost: currentVal > 0 ? currentVal.toFixed(2) : "" }));
+                    }}
+                    onBlur={() => {
+                      setActualsFocused(prev => ({ ...prev, fuelCost: false }));
+                      if (actualsInputs.fuelCost !== undefined && actualsInputs.fuelCost !== "") {
+                        handleActualsChange("actualFuelCost", actualsInputs.fuelCost);
+                      }
+                      setActualsInputs(prev => {
+                        const updated = { ...prev };
+                        delete updated.fuelCost;
+                        return updated;
+                      });
+                    }}
+                    className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Actual Waste Disposal ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={actualsFocused.wasteDisposal 
+                      ? actualsInputs.wasteDisposal 
+                      : (actuals.actualWasteDisposal !== null 
+                          ? (actuals.actualWasteDisposal === 0 ? "" : actuals.actualWasteDisposal.toFixed(2)) 
+                          : (globalInputs.wasteDisposal === 0 ? "" : globalInputs.wasteDisposal.toFixed(2)))}
+                    onChange={(e) => setActualsInputs(prev => ({ ...prev, wasteDisposal: e.target.value }))}
+                    onFocus={() => {
+                      setActualsFocused(prev => ({ ...prev, wasteDisposal: true }));
+                      const currentVal = actuals.actualWasteDisposal !== null ? actuals.actualWasteDisposal : globalInputs.wasteDisposal;
+                      setActualsInputs(prev => ({ ...prev, wasteDisposal: currentVal > 0 ? currentVal.toFixed(2) : "" }));
+                    }}
+                    onBlur={() => {
+                      setActualsFocused(prev => ({ ...prev, wasteDisposal: false }));
+                      if (actualsInputs.wasteDisposal !== undefined && actualsInputs.wasteDisposal !== "") {
+                        handleActualsChange("actualWasteDisposal", actualsInputs.wasteDisposal);
+                      }
+                      setActualsInputs(prev => {
+                        const updated = { ...prev };
+                        delete updated.wasteDisposal;
+                        return updated;
+                      });
+                    }}
+                    className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Actual Equipment Rental ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={actualsFocused.equipmentRental 
+                      ? actualsInputs.equipmentRental 
+                      : (actuals.actualEquipmentRental !== null 
+                          ? (actuals.actualEquipmentRental === 0 ? "" : actuals.actualEquipmentRental.toFixed(2)) 
+                          : (globalInputs.equipmentRental === 0 ? "" : globalInputs.equipmentRental.toFixed(2)))}
+                    onChange={(e) => setActualsInputs(prev => ({ ...prev, equipmentRental: e.target.value }))}
+                    onFocus={() => {
+                      setActualsFocused(prev => ({ ...prev, equipmentRental: true }));
+                      const currentVal = actuals.actualEquipmentRental !== null ? actuals.actualEquipmentRental : globalInputs.equipmentRental;
+                      setActualsInputs(prev => ({ ...prev, equipmentRental: currentVal > 0 ? currentVal.toFixed(2) : "" }));
+                    }}
+                    onBlur={() => {
+                      setActualsFocused(prev => ({ ...prev, equipmentRental: false }));
+                      if (actualsInputs.equipmentRental !== undefined && actualsInputs.equipmentRental !== "") {
+                        handleActualsChange("actualEquipmentRental", actualsInputs.equipmentRental);
+                      }
+                      setActualsInputs(prev => {
+                        const updated = { ...prev };
+                        delete updated.equipmentRental;
+                        return updated;
+                      });
+                    }}
+                    className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
               <div className="mt-4 flex items-center">
                 <input
                   type="checkbox"
@@ -1659,12 +1874,12 @@ export default function SprayFoamEstimator() {
                     </div>
                     <hr className="my-3" />
                     <div className="flex justify-between py-1">
-                      <span className="text-blue-600 font-medium">Base Material Cost:</span>
-                      <span className="text-blue-600 font-medium">${baseMaterialCost.toFixed(2)}</span>
+                      <span className="text-gray-600">Base Material Cost:</span>
+                      <span>${baseMaterialCost.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between py-1">
-                      <span className="text-blue-600 font-medium">Base Labor Cost:</span>
-                      <span className="text-blue-600 font-medium">${baseLaborCost.toFixed(2)}</span>
+                      <span className="text-gray-600">Base Labor Cost:</span>
+                      <span>${baseLaborCost.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between py-1">
                       <span className="text-gray-600">Fuel Cost:</span>
@@ -1693,6 +1908,16 @@ export default function SprayFoamEstimator() {
                     </div>
                     <hr className="my-3" />
                     <div className="flex justify-between py-1 font-bold text-lg">
+                      <span>Sales Price:</span>
+                      <span>${totalJobCost.toFixed(2)}</span>
+                    </div>
+                    {discountDollar > 0 && (
+                      <div className="flex justify-between py-1 text-blue-600">
+                        <span>Discount ({discountPercent.toFixed(1)}%):</span>
+                        <span>-${discountDollar.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between py-1 font-bold text-lg">
                       <span>Customer Charge:</span>
                       <span>${customerCost.toFixed(2)}</span>
                     </div>
@@ -1720,18 +1945,50 @@ export default function SprayFoamEstimator() {
                 <div className="bg-white p-4 md:p-6 rounded-lg shadow-sm">
                   <h2 className="text-xl font-bold text-gray-900 mb-6">Actual Results</h2>
                   <div className="space-y-3 text-sm">
-                    <div className="flex justify-between py-1">
-                      <span className="font-bold text-blue-600">Actual Material Cost:</span>
-                      <span className="font-bold text-blue-600">${actualMaterialCost.toFixed(2)}</span>
+                    <div className={`flex justify-between py-1 ${actualMaterialCostColor}`}>
+                      <span className={actualMaterialCostColor || "text-gray-600"}>Actual Material Cost:</span>
+                      <span>${actualMaterialCost.toFixed(2)}</span>
+                    </div>
+                    <div className={`flex justify-between py-1 ${actualLaborCostColor}`}>
+                      <span className={actualLaborCostColor || "text-gray-600"}>Actual Labor Cost:</span>
+                      <span>${actualLaborCost.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between py-1">
-                      <span className="font-bold text-blue-600">Actual Labor Cost:</span>
-                      <span className="font-bold text-blue-600">${actualLaborCost.toFixed(2)}</span>
+                      <span className="text-gray-600">Actual Fuel Cost:</span>
+                      <span>${effectiveActualFuelCost.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between py-1 font-medium">
+                    <div className="flex justify-between py-1">
+                      <span className="text-gray-600">Actual Waste Disposal:</span>
+                      <span>${effectiveActualWasteDisposal.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between py-1">
+                      <span className="text-gray-600">Actual Equipment Rental:</span>
+                      <span>${effectiveActualEquipmentRental.toFixed(2)}</span>
+                    </div>
+                    <hr className="my-3" />
+                    <div className={`flex justify-between py-1 font-bold ${actualBaseCostColor}`}>
                       <span>Actual Base Job Cost:</span>
                       <span>${actualBaseCost.toFixed(2)}</span>
                     </div>
+                    <div className="flex justify-between py-1">
+                      <span className="text-gray-600">Material Markup:</span>
+                      <span>${materialMarkupAmount.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between py-1">
+                      <span className="text-gray-600">Labor Markup:</span>
+                      <span>${laborMarkupAmount.toFixed(2)}</span>
+                    </div>
+                    <hr className="my-3" />
+                    <div className="flex justify-between py-1 font-bold text-lg">
+                      <span>Sales Price:</span>
+                      <span>${totalJobCost.toFixed(2)}</span>
+                    </div>
+                    {discountDollar > 0 && (
+                      <div className="flex justify-between py-1 text-blue-600">
+                        <span>Discount ({discountPercent.toFixed(1)}%):</span>
+                        <span>-${discountDollar.toFixed(2)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between py-1 font-bold text-lg">
                       <span>Customer Charge:</span>
                       <span>${customerCost.toFixed(2)}</span>
@@ -1746,7 +2003,7 @@ export default function SprayFoamEstimator() {
                     </div>
                     <div className="flex justify-between py-1">
                       <span className="text-gray-600">Total Fees:</span>
-                      <span>${actualFees.toFixed(2)}</span>
+                      <span>${actualTotalFees.toFixed(2)}</span>
                     </div>
                     <hr className="my-3" />
                     <div className={`flex justify-between py-1 font-bold text-lg ${actualMarginColor}`}>
