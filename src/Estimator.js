@@ -88,8 +88,8 @@ const getDefaultState = () => ({
     phone: "",
     email: ""
   },
-  estimateDate: new Date().toISOString().split('T')[0],
-  expirationDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+  engagementDate: new Date().toISOString().split('T')[0],
+  completionDate: "",
   projectNotes: "",
   globalInputs: {
     laborHours: 0,
@@ -116,8 +116,8 @@ export default function SprayFoamEstimator() {
   
   const [estimateName, setEstimateName] = useState(defaultState.estimateName);
   const [customerInfo, setCustomerInfo] = useState(defaultState.customerInfo);
-  const [estimateDate, setEstimateDate] = useState(defaultState.estimateDate);
-  const [expirationDate, setExpirationDate] = useState(defaultState.expirationDate);
+  const [engagementDate, setEngagementDate] = useState(defaultState.engagementDate);
+  const [completionDate, setCompletionDate] = useState(defaultState.completionDate);
   const [projectNotes, setProjectNotes] = useState(defaultState.projectNotes);
   const [globalInputs, setGlobalInputs] = useState(defaultState.globalInputs);
   const [sprayAreas, setSprayAreas] = useState(defaultState.sprayAreas);
@@ -532,8 +532,8 @@ export default function SprayFoamEstimator() {
       const defaults = getDefaultState();
       setEstimateName(defaults.estimateName);
       setCustomerInfo(defaults.customerInfo);
-      setEstimateDate(defaults.estimateDate);
-      setExpirationDate(defaults.expirationDate);
+      setEngagementDate(defaults.engagementDate);
+      setCompletionDate(defaults.completionDate);
       setProjectNotes(defaults.projectNotes);
       setGlobalInputs(defaults.globalInputs);
       setSprayAreas(defaults.sprayAreas);
@@ -563,8 +563,8 @@ export default function SprayFoamEstimator() {
     const data = { 
       estimateName, 
       customerInfo, 
-      estimateDate, 
-      expirationDate, 
+      engagementDate,
+      completionDate,
       projectNotes, 
       globalInputs, 
       sprayAreas, 
@@ -637,8 +637,8 @@ export default function SprayFoamEstimator() {
   const applyEstimateData = (data) => {
     setEstimateName(data.estimateName || "");
     setCustomerInfo(data.customerInfo || getDefaultState().customerInfo);
-    setEstimateDate(data.estimateDate || getDefaultState().estimateDate);
-    setExpirationDate(data.expirationDate || getDefaultState().expirationDate);
+    setEngagementDate(data.engagementDate || "");
+    setCompletionDate(data.completionDate || "");
     setProjectNotes(data.projectNotes || "");
     setGlobalInputs(data.globalInputs || getDefaultState().globalInputs);
     setSprayAreas(migrateSprayAreas(data.sprayAreas));
@@ -752,16 +752,25 @@ export default function SprayFoamEstimator() {
         });
       }
       
+      const quotePayload = {
+        clientId: client.id,
+        propertyId,
+        title: estimateName || 'Spray Foam Estimate',
+        lineItems,
+        notes: projectNotes,
+      };
+      
+      if (discountDollar > 0) {
+        quotePayload.discount = {
+          rate: parseFloat(discountPercent.toFixed(2)),
+          type: 'Percent',
+        };
+      }
+      
       const quoteResponse = await fetch('/api/jobber/create-quote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clientId: client.id,
-          propertyId,
-          title: estimateName || 'Spray Foam Estimate',
-          lineItems,
-          notes: projectNotes,
-        }),
+        body: JSON.stringify(quotePayload),
       });
       
       if (!quoteResponse.ok) {
@@ -970,20 +979,20 @@ export default function SprayFoamEstimator() {
             {/* Date Fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Estimate Date</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Customer Engagement Date</label>
                 <input
                   type="date"
-                  value={estimateDate}
-                  onChange={(e) => setEstimateDate(e.target.value)}
+                  value={engagementDate}
+                  onChange={(e) => setEngagementDate(e.target.value)}
                   className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Valid Until</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Project Completion Date</label>
                 <input
                   type="date"
-                  value={expirationDate}
-                  onChange={(e) => setExpirationDate(e.target.value)}
+                  value={completionDate}
+                  onChange={(e) => setCompletionDate(e.target.value)}
                   className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
