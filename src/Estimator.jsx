@@ -1448,57 +1448,102 @@ export default function SprayFoamEstimator({ onAdmin }) {
           .replace(/\{\{\s*rvalue\s*\}\}/gi, rValueFormatted)
           .replace(/\{\{\s*sqft\s*\}\}/gi, areaSqFt != null ? String(Math.round(areaSqFt)) : '')
           .replace(/\{\{\s*area\s*\}\}/gi, area.name || '')
-          .replace(/\{\{\s*foamType\s*\}\}/gi, foamApp.foamTypeName || category || '');
+          .replace(/\{\{\s*foamType\s*\}\}/gi, foamApp.foamTypeName || category || '')
+          .replace(/\{\{\s*coatingType\s*\}\}/gi, foamApp.coatingTypeName || '')
+          .replace(/\{\{\s*areaType\s*\}\}/gi, area.areaType || '');
 
         // Check admin-configured Jobber descriptions first
         const descKey = `${area.areaType}-${category}`;
         const adminDesc = adminSettings?.jobberDescriptions?.[descKey];
         if (adminDesc) {
-          const filled = applyTokens(adminDesc);
-          // If the template already includes an R-Value token, trust the author and
-          // don't auto-append the legacy "[Resulting in an effective R-Value...]" line.
-          if (/\{\{\s*rvalue\s*\}\}/i.test(adminDesc)) {
-            return filled;
-          }
-          return `${filled}\n[Resulting in an effective R-Value of ${rValueFormatted}]`;
+          return applyTokens(adminDesc);
         }
-        
+
         if (area.areaType === "Exterior Walls" && category === "Closed") {
-          return `Closed-cell spray foam insulation applied at an average depth of ${thickness} inches within exterior wall cavities, creating a high-performance thermal barrier, moisture seal, and structural enhancement. Includes sealing around all windows and doors as well as sealing bottom plates.\n[Resulting in an effective R-Value of ${rValueFormatted}]`;
+          return `Closed-cell spray foam insulation applied at an average depth of ${thickness} inches within exterior wall cavities, creating a high-performance thermal barrier, moisture seal, and structural enhancement. Includes sealing around all windows and doors as well as sealing bottom plates.`;
         }
         if (area.areaType === "Exterior Walls" && category === "Open") {
-          return `Open-cell spray foam insulation applied at an average depth of ${thickness} inches within exterior wall cavities, creating a high performance air seal, sound deadening, and high level thermal resistance. Includes sealing around all windows and doors as well as sealing bottom plates.\n[Resulting in an effective R-Value of ${rValueFormatted}]`;
+          return `Open-cell spray foam insulation applied at an average depth of ${thickness} inches within exterior wall cavities, creating a high performance air seal, sound deadening, and high level thermal resistance. Includes sealing around all windows and doors as well as sealing bottom plates.`;
         }
         if (area.areaType === "Roof Deck" && category === "Closed") {
-          return `Closed-cell spray foam insulation applied at an average depth of ${thickness} inches to the underside of the roof deck, providing a high-performance air seal, moisture barrier, and superior thermal resistance.\n[Resulting in an effective R-Value of ${rValueFormatted}]`;
+          return `Closed-cell spray foam insulation applied at an average depth of ${thickness} inches to the underside of the roof deck, providing a high-performance air seal, moisture barrier, and superior thermal resistance.`;
         }
         if (area.areaType === "Roof Deck" && category === "Open") {
-          return `Open cell spray foam applied at an average depth of ${thickness} inches to the underside of the roof deck, providing a high performance air seal, sound deadening, and high level thermal resistance.\n[Resulting in an effective R-Value of ${rValueFormatted}]`;
+          return `Open cell spray foam applied at an average depth of ${thickness} inches to the underside of the roof deck, providing a high performance air seal, sound deadening, and high level thermal resistance.`;
         }
         return '';
       };
       
+      // Token substitution helper for material line items (foam + coating).
+      const buildMaterialTokens = (area, foamApp, opts = {}) => {
+        const { thickness = '', rValueFormatted = '', sqft = '' } = opts;
+        return (template) => template
+          .replace(/\{\{\s*thickness\s*\}\}/gi, String(thickness ?? ''))
+          .replace(/\{\{\s*rvalue\s*\}\}/gi, rValueFormatted)
+          .replace(/\{\{\s*sqft\s*\}\}/gi, sqft != null ? String(sqft) : '')
+          .replace(/\{\{\s*area\s*\}\}/gi, area.name || '')
+          .replace(/\{\{\s*foamType\s*\}\}/gi, foamApp.foamTypeName || '')
+          .replace(/\{\{\s*coatingType\s*\}\}/gi, foamApp.coatingTypeName || '')
+          .replace(/\{\{\s*areaType\s*\}\}/gi, area.areaType || '');
+      };
+
       sprayAreas.forEach(area => {
         const areaSqFtForCalcs = calculateEffectiveSqFt(area);
         area.foamApplications.forEach(foamApp => {
           if (foamApp.applicationType === "Coating") {
             const calcs = calculateCoatingApplicationCost(foamApp, areaSqFtForCalcs);
+            const sqft = Math.round(areaSqFtForCalcs);
+            // Prefer the admin-set / estimator-shown defaultPricePerSqFt. If the estimate
+            // pre-dates this field (older saved coatings), derive an equivalent $/sqft
+            // from the calculated total so the Jobber line total still matches what the
+            // estimator shows on screen.
+            let pricePerSqFt = parseFloat(foamApp.defaultPricePerSqFt) || 0;
+            if (pricePerSqFt <= 0 && sqft > 0 && calcs.totalCost > 0) {
+              pricePerSqFt = Math.round((calcs.totalCost / sqft) * 1000) / 1000;
+            }
+            const coatingId = foamApp.coatingTypeId;
+            const nameKey = coatingId ? `material:coating:${coatingId}:name` : null;
+            const descKey = coatingId ? `material:coating:${coatingId}:desc` : null;
+            const adminName = nameKey ? adminSettings?.jobberDescriptions?.[nameKey] : null;
+            const adminDesc = descKey ? adminSettings?.jobberDescriptions?.[descKey] : null;
+            const applyT = buildMaterialTokens(area, foamApp, { sqft });
+            const name = (adminName && adminName.trim())
+              ? applyT(adminName).trim() || `${area.name} - ${foamApp.coatingTypeName || 'Coating'}`
+              : `${area.name} - ${foamApp.coatingTypeName || 'Coating'}`;
+            const description = (adminDesc && adminDesc.trim())
+              ? applyT(adminDesc)
+              : `${calcs.containers.toFixed(2)} containers`;
             lineItems.push({
-              name: `${area.name} - ${foamApp.coatingTypeName || 'Coating'}`,
-              description: `${calcs.containers.toFixed(2)} containers`,
-              quantity: Math.round(calcs.containers * 100) / 100,
-              unitPrice: calcs.pricePerContainer || 0,
+              name,
+              description,
+              quantity: sqft,
+              unitPrice: pricePerSqFt,
             });
             return;
           }
           const calcs = calculateFoamApplicationCost(area, foamApp);
           const sqft = Math.round(calcs.sqft);
-          const description = getLineItemDescription(area, foamApp, calcs.rValue, areaSqFtForCalcs);
           const category = foamApp.foamTypeCategory || foamApp.foamType;
           const displayName = foamApp.foamTypeName || `${category} Cell`;
-          
+          const foamId = foamApp.foamTypeId;
+          const nameKey = foamId ? `material:foam:${foamId}:name` : null;
+          const descKey = foamId ? `material:foam:${foamId}:desc` : null;
+          const adminName = nameKey ? adminSettings?.jobberDescriptions?.[nameKey] : null;
+          const adminDesc = descKey ? adminSettings?.jobberDescriptions?.[descKey] : null;
+          const applyT = buildMaterialTokens(area, foamApp, {
+            thickness: foamApp.foamThickness,
+            rValueFormatted: calcs.rValue.toFixed(1),
+            sqft,
+          });
+          const name = (adminName && adminName.trim())
+            ? applyT(adminName).trim() || `${area.name} (${displayName} ${foamApp.foamThickness}in)`
+            : `${area.name} (${displayName} ${foamApp.foamThickness}in)`;
+          const description = (adminDesc && adminDesc.trim())
+            ? applyT(adminDesc)
+            : getLineItemDescription(area, foamApp, calcs.rValue, areaSqFtForCalcs);
+
           lineItems.push({
-            name: `${area.name} (${displayName} ${foamApp.foamThickness}in)`,
+            name,
             description,
             quantity: sqft,
             unitPrice: calcs.pricePerSqFt,
@@ -1508,9 +1553,33 @@ export default function SprayFoamEstimator({ onAdmin }) {
       
       const laborTotal = Math.round((baseLaborCost + laborMarkupAmount + additionalJobCostBase + additionalJobCostMarkup) * 100) / 100;
       if (laborTotal > 0) {
+        const LABOR_NAME_DEFAULT = 'Complete Spray Foam Insulation Solution';
+        const LABOR_DESC_DEFAULT = 'Includes a full-service spray foam insulation package: on-site evaluation, masking and surface prep, application of open or closed cell spray foam at the specified thickness, and post-job cleanup. Designed to deliver maximum R-value, air sealing, and moisture control for residential or commercial projects.';
+
+        // Labor tokens substitute with blanks for foam/area-specific values since
+        // the labor line item is not bound to a specific application.
+        const applyLaborTokens = (template) => template
+          .replace(/\{\{\s*thickness\s*\}\}/gi, '')
+          .replace(/\{\{\s*rvalue\s*\}\}/gi, '')
+          .replace(/\{\{\s*sqft\s*\}\}/gi, '')
+          .replace(/\{\{\s*area\s*\}\}/gi, '')
+          .replace(/\{\{\s*foamType\s*\}\}/gi, '')
+          .replace(/\{\{\s*coatingType\s*\}\}/gi, '')
+          .replace(/\{\{\s*areaType\s*\}\}/gi, '');
+
+        const adminLaborName = adminSettings?.jobberDescriptions?.['laborName'];
+        const adminLaborDesc = adminSettings?.jobberDescriptions?.['labor'];
+
+        const laborName = (adminLaborName && adminLaborName.trim())
+          ? applyLaborTokens(adminLaborName).trim() || LABOR_NAME_DEFAULT
+          : LABOR_NAME_DEFAULT;
+        const laborDescription = (adminLaborDesc && adminLaborDesc.trim())
+          ? applyLaborTokens(adminLaborDesc)
+          : LABOR_DESC_DEFAULT;
+
         lineItems.push({
-          name: 'Complete Spray Foam Insulation Solution',
-          description: 'Includes a full-service spray foam insulation package: on-site evaluation, masking and surface prep, application of open or closed cell spray foam at the specified thickness, and post-job cleanup. Designed to deliver maximum R-value, air sealing, and moisture control for residential or commercial projects.',
+          name: laborName,
+          description: laborDescription,
           quantity: 1,
           unitPrice: laborTotal,
         });

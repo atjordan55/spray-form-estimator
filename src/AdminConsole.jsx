@@ -461,6 +461,17 @@ export default function AdminConsole({ onBack }) {
   const [saveSuccess, setSaveSuccess] = useState('');
   const [saveError, setSaveError] = useState('');
   const [activeSection, setActiveSection] = useState('company');
+  const [selectedMaterialKey, setSelectedMaterialKey] = useState('');
+
+  // Clear selectedMaterialKey if its target foam/coating no longer exists
+  // (e.g. user deleted the product or reloaded settings).
+  useEffect(() => {
+    if (!selectedMaterialKey) return;
+    const [kind, id] = selectedMaterialKey.split(':');
+    const list = kind === 'foam' ? (settings.foamTypes || []) : kind === 'coating' ? (settings.coatingTypes || []) : [];
+    const exists = list.some(item => String(item.id) === id);
+    if (!exists) setSelectedMaterialKey('');
+  }, [selectedMaterialKey, settings.foamTypes, settings.coatingTypes]);
 
   const [settings, setSettings] = useState({
     companyName: '',
@@ -1321,69 +1332,141 @@ export default function AdminConsole({ onBack }) {
 
         {/* Jobber Descriptions */}
         {activeSection === 'jobberDesc' && (() => {
-          const SAMPLE = { thickness: '2', rvalue: '14.4', sqft: '1850', area: 'Main Floor' };
-          const applyTokens = (template, foamTypeLabel) => {
+          const SAMPLE = { thickness: '2', rvalue: '14.4', sqft: '1850', area: 'Main Floor', foamType: 'Enverge 2lb', coatingType: 'Polyurea Top Coat', areaType: 'Exterior Walls' };
+          const applyTokens = (template, ctx = {}) => {
             if (!template) return '';
-            let out = template
+            return template
               .replace(/\{\{\s*thickness\s*\}\}/gi, SAMPLE.thickness)
               .replace(/\{\{\s*rvalue\s*\}\}/gi, SAMPLE.rvalue)
               .replace(/\{\{\s*sqft\s*\}\}/gi, SAMPLE.sqft)
               .replace(/\{\{\s*area\s*\}\}/gi, SAMPLE.area)
-              .replace(/\{\{\s*foamType\s*\}\}/gi, foamTypeLabel || '');
-            if (!/\{\{\s*rvalue\s*\}\}/i.test(template)) {
-              out += `\n[Resulting in an effective R-Value of ${SAMPLE.rvalue}]`;
-            }
-            return out;
+              .replace(/\{\{\s*foamType\s*\}\}/gi, ctx.foamTypeLabel || SAMPLE.foamType)
+              .replace(/\{\{\s*coatingType\s*\}\}/gi, ctx.coatingTypeLabel || SAMPLE.coatingType)
+              .replace(/\{\{\s*areaType\s*\}\}/gi, ctx.areaTypeLabel || SAMPLE.areaType);
           };
-          const Preview = ({ template, foamTypeLabel }) => {
+          const Preview = ({ template, foamTypeLabel, coatingTypeLabel, areaTypeLabel }) => {
             const trimmed = (template || '').trim();
             if (!trimmed) return null;
             return (
               <div className="mt-1.5 text-xs">
-                <div className="text-gray-500 mb-0.5">Live preview (sample: 2" thick, R-14.4, 1,850 sq ft, "Main Floor"):</div>
-                <pre className="whitespace-pre-wrap bg-gray-50 border border-gray-200 rounded p-2 text-gray-800 font-sans">{applyTokens(trimmed, foamTypeLabel)}</pre>
+                <div className="text-gray-500 mb-0.5">Live preview (sample values used for any tokens not bound to this field — 2" thick, R-14.4, 1,850 sq ft, "Main Floor", "Enverge 2lb", "Polyurea Top Coat", "Exterior Walls"):</div>
+                <pre className="whitespace-pre-wrap bg-gray-50 border border-gray-200 rounded p-2 text-gray-800 font-sans">{applyTokens(trimmed, { foamTypeLabel, coatingTypeLabel, areaTypeLabel })}</pre>
               </div>
             );
           };
           return (
           <div className="space-y-4">
-            <SectionCard title="Jobber Quote — Labor Line Item Description">
-              <div>
-                <label className={labelClass}>Labor Line Item Description</label>
-                <textarea rows={3} value={settings.jobberDescriptions['labor'] || ''} onChange={(e) => updateJobberDesc('labor', e.target.value)} className={inputClass} />
-                <Preview template={settings.jobberDescriptions['labor']} foamTypeLabel="" />
+            <SectionCard title="Jobber Quote — Labor Line Item">
+              <p className="text-sm text-gray-500 mb-3">Set default name and description for the Labor Line Item sent to Jobber. Dynamic tokens are supported in both fields.</p>
+              <div className="space-y-4">
+                <div>
+                  <label className={labelClass}>Labor Line Item Name</label>
+                  <input type="text" value={settings.jobberDescriptions['laborName'] || ''} onChange={(e) => updateJobberDesc('laborName', e.target.value)} className={inputClass} placeholder="Complete Spray Foam Insulation Solution" />
+                  <Preview template={settings.jobberDescriptions['laborName']} />
+                </div>
+                <div>
+                  <label className={labelClass}>Labor Line Item Description</label>
+                  <textarea rows={3} value={settings.jobberDescriptions['labor'] || ''} onChange={(e) => updateJobberDesc('labor', e.target.value)} className={inputClass} />
+                  <Preview template={settings.jobberDescriptions['labor']} />
+                </div>
               </div>
             </SectionCard>
-            <SectionCard title="Jobber Quote — Material Line Item Descriptions">
-              <p className="text-sm text-gray-500 mb-2">Set default descriptions for each area type and foam category combination sent to Jobber.</p>
+            <SectionCard title="Jobber Quote — Material Line Item">
+              <p className="text-sm text-gray-500 mb-2">Set default names and descriptions for each Foam Type and Coating Type sent to Jobber. Select a product below to configure it. Dynamic tokens are supported in both fields.</p>
               <div className="text-xs text-gray-600 bg-blue-50 border border-blue-200 rounded p-3 mb-4">
-                <p className="font-semibold mb-1">Dynamic tokens — paste these into any description and they'll be replaced with live estimate values when the quote is sent to Jobber:</p>
+                <p className="font-semibold mb-1">Dynamic tokens — paste these into any field and they'll be replaced with live estimate values when the quote is sent to Jobber:</p>
                 <ul className="list-disc ml-5 space-y-0.5">
                   <li><code className="bg-white px-1 rounded">{'{{thickness}}'}</code> — foam thickness in inches (e.g. <code>2</code>)</li>
-                  <li><code className="bg-white px-1 rounded">{'{{rvalue}}'}</code> — calculated R-Value, 1 decimal (e.g. <code>14.4</code>). If used, the legacy "[Resulting in an effective R-Value of X]" line is <em>not</em> auto-appended.</li>
+                  <li><code className="bg-white px-1 rounded">{'{{rvalue}}'}</code> — calculated R-Value, 1 decimal (e.g. <code>14.4</code>)</li>
                   <li><code className="bg-white px-1 rounded">{'{{sqft}}'}</code> — effective square footage for this area</li>
                   <li><code className="bg-white px-1 rounded">{'{{area}}'}</code> — area name (e.g. <code>Main Floor</code>)</li>
-                  <li><code className="bg-white px-1 rounded">{'{{foamType}}'}</code> — foam product name (e.g. <code>Closed Cell 2.0</code>)</li>
+                  <li><code className="bg-white px-1 rounded">{'{{foamType}}'}</code> — foam product name (e.g. <code>Enverge 2lb</code>)</li>
+                  <li><code className="bg-white px-1 rounded">{'{{coatingType}}'}</code> — coating product name (e.g. <code>Polyurea Top Coat</code>)</li>
+                  <li><code className="bg-white px-1 rounded">{'{{areaType}}'}</code> — area type (e.g. <code>Exterior Walls</code>, <code>Roof Deck</code>)</li>
                 </ul>
-                <p className="mt-2">Example: <code className="bg-white px-1 rounded">…applied at an average depth of {'{{thickness}}'} inches…</code> becomes <code className="bg-white px-1 rounded">…applied at an average depth of 2 inches…</code></p>
+                <p className="mt-2">Example: <code className="bg-white px-1 rounded">{'{{foamType}}'} ({'{{thickness}}'} inches)</code> becomes <code className="bg-white px-1 rounded">Enverge 2lb (2 inches)</code></p>
               </div>
-              {AREA_TYPES.map(areaType => (
-                <div key={areaType} className="mb-5">
-                  <h4 className="text-sm font-semibold text-gray-700 mb-2">{areaType}</h4>
-                  <div className="space-y-3">
-                    {FOAM_CATEGORIES.map(cat => {
-                      const key = `${areaType}-${cat}`;
-                      return (
-                        <div key={key}>
-                          <label className={labelClass}>{cat} Cell</label>
-                          <textarea rows={2} value={settings.jobberDescriptions[key] || ''} onChange={(e) => updateJobberDesc(key, e.target.value)} className={inputClass} />
-                          <Preview template={settings.jobberDescriptions[key]} foamTypeLabel={`${cat} Cell`} />
+              {(() => {
+                const foamOptions = (settings.foamTypes || []).filter(f => f.active !== false);
+                const coatingOptions = (settings.coatingTypes || []).filter(c => c.active !== false);
+                if (foamOptions.length === 0 && coatingOptions.length === 0) {
+                  return <p className="text-sm text-gray-500 italic">No Foam Types or Coating Types configured yet. Add some under the Foam Types or Coating Types tabs first.</p>;
+                }
+                const selectedKey = selectedMaterialKey;
+                let selectedFoam = null;
+                let selectedCoating = null;
+                if (selectedKey.startsWith('foam:')) {
+                  const id = selectedKey.slice(5);
+                  selectedFoam = foamOptions.find(f => String(f.id) === id) || null;
+                } else if (selectedKey.startsWith('coating:')) {
+                  const id = selectedKey.slice(8);
+                  selectedCoating = coatingOptions.find(c => String(c.id) === id) || null;
+                }
+                const nameKey = selectedKey ? `material:${selectedKey}:name` : null;
+                const descKey = selectedKey ? `material:${selectedKey}:desc` : null;
+                const selectedLabel = selectedFoam
+                  ? (selectedFoam.productName || selectedFoam.name || 'Foam')
+                  : selectedCoating
+                    ? (selectedCoating.productName || selectedCoating.name || 'Coating')
+                    : '';
+                return (
+                  <>
+                    <div className="mb-4">
+                      <label className={labelClass}>Select Foam Type or Coating Type to configure</label>
+                      <select value={selectedKey} onChange={(e) => setSelectedMaterialKey(e.target.value)} className={inputClass}>
+                        <option value="">— Select a product —</option>
+                        {foamOptions.length > 0 && (
+                          <optgroup label="Foam Types">
+                            {foamOptions.map(f => (
+                              <option key={`foam-${f.id}`} value={`foam:${f.id}`}>{f.productName || f.name}</option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {coatingOptions.length > 0 && (
+                          <optgroup label="Coating Types">
+                            {coatingOptions.map(c => (
+                              <option key={`coating-${c.id}`} value={`coating:${c.id}`}>{c.productName || c.name}</option>
+                            ))}
+                          </optgroup>
+                        )}
+                      </select>
+                    </div>
+                    {selectedKey && (
+                      <div className="space-y-4 border-l-2 border-blue-200 pl-4">
+                        <div>
+                          <label className={labelClass}>Material Line Item Name</label>
+                          <input
+                            type="text"
+                            value={settings.jobberDescriptions[nameKey] || ''}
+                            onChange={(e) => updateJobberDesc(nameKey, e.target.value)}
+                            className={inputClass}
+                            placeholder={selectedFoam ? `${selectedLabel} ({{thickness}} inches)` : selectedLabel}
+                          />
+                          <Preview
+                            template={settings.jobberDescriptions[nameKey]}
+                            foamTypeLabel={selectedFoam ? selectedLabel : ''}
+                            coatingTypeLabel={selectedCoating ? selectedLabel : ''}
+                          />
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+                        <div>
+                          <label className={labelClass}>Material Line Item Description</label>
+                          <textarea
+                            rows={3}
+                            value={settings.jobberDescriptions[descKey] || ''}
+                            onChange={(e) => updateJobberDesc(descKey, e.target.value)}
+                            className={inputClass}
+                          />
+                          <Preview
+                            template={settings.jobberDescriptions[descKey]}
+                            foamTypeLabel={selectedFoam ? selectedLabel : ''}
+                            coatingTypeLabel={selectedCoating ? selectedLabel : ''}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </SectionCard>
           </div>
           );
